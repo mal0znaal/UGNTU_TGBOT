@@ -1,0 +1,17 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+.idea/
+.vscode/
+
+# models are stored outside normal git history
+ml_service/models/*.onnx
+ml_service/models/*.pt
+ml_service/models/*.pth
+!ml_service/models/.gitkeep
+
+# temporary results
+result.png
+*.log

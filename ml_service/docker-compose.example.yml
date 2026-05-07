@@ -1,0 +1,41 @@
+services:
+  ml-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: wardrobe-ml-service:latest
+    container_name: ml-service
+    ports:
+      - "8000:8000"
+    environment:
+      DETECTOR_ONNX_PATH: /app/models/detector.onnx
+      SEGMENTER_ONNX_PATH: /app/models/segmenter.onnx
+      YOLO_INPUT_SIZE: 960
+      SEG_INPUT_SIZE: 720
+      YOLO_CONF_THRESHOLD: 0.25
+      YOLO_IOU_THRESHOLD: 0.45
+      CROP_PADDING: 0.10
+      MASK_THRESHOLD: 0.5
+    volumes:
+      - ./models:/app/models:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Telegram bot example:
+  # bot:
+  #   image: your-telegram-bot-image
+  #   environment:
+  #     ML_SERVICE_URL: http://ml-service:8000/process
+  #   depends_on:
+  #     ml-service:
+  #       condition: service_healthy

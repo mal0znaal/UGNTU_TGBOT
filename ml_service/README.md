@@ -87,6 +87,15 @@ curl.exe -X POST `
 
 Успешный ответ: `HTTP 200`, `Content-Type: image/png`, тело ответа - PNG crop одежды с alpha-channel.
 
+Каждый успешный инференс сохраняется в `INFERENCE_OUTPUT_DIR`:
+
+```text
+source.png
+result.png
+```
+
+В основном compose проекта эта папка проброшена на хост как `ml_service/inference_results/`.
+
 Ошибки:
 
 - `400` - изображение не декодируется.

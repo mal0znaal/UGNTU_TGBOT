@@ -8,9 +8,12 @@ services:
       - "8000:8000"
     volumes:
       - ./ml_service/models:/app/models:ro
+      - ./ml_service/inference_results:/app/inference_results
     environment:
       DETECTOR_ONNX_PATH: /app/models/detector.onnx
       SEGMENTER_ONNX_PATH: /app/models/segmenter.onnx
+      SAVE_INFERENCE_RESULTS: "true"
+      INFERENCE_OUTPUT_DIR: /app/inference_results
     healthcheck:
       test:
         [

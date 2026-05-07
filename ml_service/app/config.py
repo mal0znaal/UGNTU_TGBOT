@@ -10,6 +10,13 @@ def _get_float(name: str, default: float) -> float:
     return float(os.getenv(name, str(default)))
 
 
+def _get_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True)
 class Settings:
     detector_onnx_path: str = os.getenv("DETECTOR_ONNX_PATH", "/app/models/detector.onnx")
@@ -20,6 +27,8 @@ class Settings:
     yolo_iou_threshold: float = _get_float("YOLO_IOU_THRESHOLD", 0.45)
     crop_padding: float = _get_float("CROP_PADDING", 0.10)
     mask_threshold: float = _get_float("MASK_THRESHOLD", 0.5)
+    save_inference_results: bool = _get_bool("SAVE_INFERENCE_RESULTS", True)
+    inference_output_dir: str = os.getenv("INFERENCE_OUTPUT_DIR", "/app/inference_results")
 
 
 def get_settings() -> Settings:

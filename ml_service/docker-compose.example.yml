@@ -10,6 +10,8 @@ services:
     environment:
       DETECTOR_ONNX_PATH: /app/models/detector.onnx
       SEGMENTER_ONNX_PATH: /app/models/segmenter.onnx
+      SAVE_INFERENCE_RESULTS: "true"
+      INFERENCE_OUTPUT_DIR: /app/inference_results
       YOLO_INPUT_SIZE: 960
       SEG_INPUT_SIZE: 720
       YOLO_CONF_THRESHOLD: 0.25
@@ -18,6 +20,7 @@ services:
       MASK_THRESHOLD: 0.5
     volumes:
       - ./models:/app/models:ro
+      - ./inference_results:/app/inference_results
     healthcheck:
       test:
         [

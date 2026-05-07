@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import cv2
 import numpy as np
 
@@ -67,3 +69,21 @@ def encode_rgba_png(rgb: np.ndarray, alpha: np.ndarray) -> bytes:
     if not ok:
         raise ValueError("Failed to encode PNG")
     return encoded.tobytes()
+
+
+def encode_rgb_png(rgb: np.ndarray) -> bytes:
+    if rgb.ndim != 3 or rgb.shape[2] != 3:
+        raise ValueError(f"Expected RGB image, got shape={rgb.shape}")
+
+    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    ok, encoded = cv2.imencode(".png", bgr)
+    if not ok:
+        raise ValueError("Failed to encode source PNG")
+    return encoded.tobytes()
+
+
+def save_inference_images(output_dir: Path, source_rgb: np.ndarray, result_png: bytes) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "source.png").write_bytes(encode_rgb_png(source_rgb))
+    (output_dir / "result.png").write_bytes(result_png)
+    return output_dir

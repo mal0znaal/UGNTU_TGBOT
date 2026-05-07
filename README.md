@@ -69,6 +69,19 @@ curl.exe -X POST `
 
 Успешный ответ `/process` - `image/png` bytes.
 
+Каждый успешный инференс сохраняется на хосте в:
+
+```text
+ml_service/inference_results/
+```
+
+Для каждого запроса создается отдельная подпапка с файлами:
+
+```text
+source.png
+result.png
+```
+
 ## Важно про адреса внутри Docker Compose
 
 Внутри Docker Compose бот должен обращаться к ML-сервису по адресу:

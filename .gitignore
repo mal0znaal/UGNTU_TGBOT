@@ -14,4 +14,5 @@ ml_service/models/*.pth
 
 # temporary results
 result.png
+ml_service/inference_results/
 *.log

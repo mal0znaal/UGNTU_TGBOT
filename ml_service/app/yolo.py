@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 
 import cv2
 import numpy as np
@@ -12,6 +13,19 @@ class Detection:
     bbox: list[float]  # [x1, y1, x2, y2] normalised to [0, 1]
     confidence: float
     class_id: int
+
+
+@dataclass(frozen=True)
+class DetectorTiming:
+    preprocess_ms: float
+    inference_ms: float
+    postprocess_ms: float
+
+
+@dataclass(frozen=True)
+class DetectorResult:
+    detections: list[Detection]
+    timing: DetectorTiming
 
 
 def preprocess_rgb(
@@ -103,25 +117,13 @@ def postprocess(
     x2 = np.clip(x2 / orig_w, 0.0, 1.0)
     y2 = np.clip(y2 / orig_h, 0.0, 1.0)
 
-    boxes_nms = np.stack(
-        [x1 * orig_w, y1 * orig_h, (x2 - x1) * orig_w, (y2 - y1) * orig_h],
-        axis=1,
-    )
-    indices = cv2.dnn.NMSBoxes(
-        boxes_nms.tolist(),
-        confidences.tolist(),
-        float(conf_threshold),
-        float(iou_threshold),
-    )
-    flat = np.array(indices).reshape(-1) if len(indices) else []
-
     return [
         Detection(
             bbox=[float(x1[i]), float(y1[i]), float(x2[i]), float(y2[i])],
             confidence=float(confidences[i]),
             class_id=int(class_ids[i]),
         )
-        for i in flat
+        for i in range(len(confidences))
     ]
 
 
@@ -152,6 +154,26 @@ class YoloDetector:
         self.output_names = [output.name for output in self.session.get_outputs()]
 
     def detect(self, image_rgb: np.ndarray) -> list[Detection]:
+        return self.detect_with_timing(image_rgb).detections
+
+    def detect_with_timing(self, image_rgb: np.ndarray) -> DetectorResult:
+        preprocess_start = perf_counter()
         tensor, orig_info = preprocess_rgb(image_rgb, self.input_size, self.input_size)
+        preprocess_ms = (perf_counter() - preprocess_start) * 1000
+
+        inference_start = perf_counter()
         outputs = self.session.run(self.output_names, {self.input_name: tensor})
-        return postprocess(outputs, orig_info, self.conf_threshold, self.iou_threshold)
+        inference_ms = (perf_counter() - inference_start) * 1000
+
+        postprocess_start = perf_counter()
+        detections = postprocess(outputs, orig_info, self.conf_threshold, self.iou_threshold)
+        postprocess_ms = (perf_counter() - postprocess_start) * 1000
+
+        return DetectorResult(
+            detections=detections,
+            timing=DetectorTiming(
+                preprocess_ms=preprocess_ms,
+                inference_ms=inference_ms,
+                postprocess_ms=postprocess_ms,
+            ),
+        )

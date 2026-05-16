@@ -2,6 +2,81 @@ import os
 from dataclasses import dataclass
 
 
+BAD_CLASS_NAMES = [
+    "person",
+    "bicycle",
+    "car",
+    "motorcycle",
+    "airplane",
+    "bus",
+    "train",
+    "truck",
+    "boat",
+    "traffic light",
+    "fire hydrant",
+    "stop sign",
+    "parking meter",
+    "bench",
+    "bird",
+    "cat",
+    "dog",
+    "horse",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra",
+    "giraffe",
+    "frisbee",
+    "skis",
+    "snowboard",
+    "sports ball",
+    "kite",
+    "baseball bat",
+    "baseball glove",
+    "skateboard",
+    "surfboard",
+    "tennis racket",
+    "bottle",
+    "wine glass",
+    "cup",
+    "fork",
+    "knife",
+    "spoon",
+    "bowl",
+    "banana",
+    "apple",
+    "sandwich",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza",
+    "donut",
+    "cake",
+    "potted plant",
+    "toilet",
+    "tv",
+    "laptop",
+    "mouse",
+    "remote",
+    "keyboard",
+    "cell phone",
+    "microwave",
+    "oven",
+    "toaster",
+    "sink",
+    "refrigerator",
+    "book",
+    "clock",
+    "vase",
+    "scissors",
+    "teddy bear",
+    "hair drier",
+    "toothbrush",
+]
+
+
 def _get_int(name: str, default: int) -> int:
     return int(os.getenv(name, str(default)))
 
@@ -19,14 +94,20 @@ def _get_bool(name: str, default: bool) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
-    detector_onnx_path: str = os.getenv("DETECTOR_ONNX_PATH", "/app/models/detector.onnx")
-    segmenter_onnx_path: str = os.getenv("SEGMENTER_ONNX_PATH", "/app/models/segmenter.onnx")
+    garment_model_path: str = os.getenv(
+        "GARMENT_MODEL_PATH",
+        os.getenv("DETECTOR_ONNX_PATH", "/app/models/detector.onnx"),
+    )
+    bad_classes_detector_path: str = os.getenv(
+        "BAD_CLASSES_DETECTOR_PATH",
+        "/app/models/bad_classes_detector.onnx",
+    )
     yolo_input_size: int = _get_int("YOLO_INPUT_SIZE", 960)
-    seg_input_size: int = _get_int("SEG_INPUT_SIZE", 720)
-    yolo_conf_threshold: float = _get_float("YOLO_CONF_THRESHOLD", 0.25)
     yolo_iou_threshold: float = _get_float("YOLO_IOU_THRESHOLD", 0.45)
-    crop_padding: float = _get_float("CROP_PADDING", 0.10)
-    mask_threshold: float = _get_float("MASK_THRESHOLD", 0.5)
+    garment_conf: float = _get_float("GARMENT_CONF", 0.25)
+    bad_class_conf: float = _get_float("BAD_CLASS_CONF", 0.35)
+    person_conf: float = _get_float("PERSON_CONF", 0.75)
+    bad_class_names: tuple[str, ...] = tuple(BAD_CLASS_NAMES)
     save_inference_results: bool = _get_bool("SAVE_INFERENCE_RESULTS", True)
     inference_output_dir: str = os.getenv("INFERENCE_OUTPUT_DIR", "/app/inference_results")
 

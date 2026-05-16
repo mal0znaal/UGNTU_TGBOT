@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import sys
 
@@ -13,7 +14,8 @@ if sys.platform == "win32":
 
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://ml-service:8000/process")
+ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://ml-service:8000/cascade")
+TELEGRAM_PHOTO_SIZE_LIMIT = 10 * 1024 * 1024
 
 dp = Dispatcher()
 
@@ -45,15 +47,33 @@ async def handle_photo(message: Message, bot: Bot):
 
             async with http_session.post(ML_SERVICE_URL, data=form) as response:
                 if response.status == 200:
+                    content_type = response.headers.get("Content-Type", "")
+                    if content_type.startswith("text/plain"):
+                        await message.answer(await response.text())
+                        return
+                    if content_type.startswith("application/json"):
+                        result_json = await response.json()
+                        await message.answer(
+                            f"<pre>{json.dumps(result_json, ensure_ascii=False, indent=2)}</pre>",
+                            parse_mode="HTML",
+                        )
+                        return
+
                     result_image_bytes = await response.read()
                     result_file = BufferedInputFile(
                         result_image_bytes,
-                        filename="no_bg.png",
+                        filename="detections.png",
                     )
-                    await message.answer_photo(
-                        photo=result_file,
-                        caption="Готово! Вот твоя одежда без фона.",
-                    )
+                    if len(result_image_bytes) < TELEGRAM_PHOTO_SIZE_LIMIT:
+                        await message.answer_photo(
+                            photo=result_file,
+                            caption="Готово! Вот результат детектора.",
+                        )
+                    else:
+                        await message.answer_document(
+                            document=result_file,
+                            caption="Готово! Вот результат детектора.",
+                        )
                 else:
                     await message.answer(f"Ошибка от нейросети. Код: {response.status}")
     except Exception as exc:

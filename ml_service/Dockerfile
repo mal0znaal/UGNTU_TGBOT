@@ -11,14 +11,13 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY app /app/app
 COPY models /app/models
 
-ENV DETECTOR_ONNX_PATH=/app/models/detector.onnx
-ENV SEGMENTER_ONNX_PATH=/app/models/segmenter.onnx
+ENV GARMENT_MODEL_PATH=/app/models/detector.onnx
+ENV BAD_CLASSES_DETECTOR_PATH=/app/models/bad_classes_detector.onnx
 ENV YOLO_INPUT_SIZE=960
-ENV SEG_INPUT_SIZE=720
-ENV YOLO_CONF_THRESHOLD=0.25
 ENV YOLO_IOU_THRESHOLD=0.45
-ENV CROP_PADDING=0.10
-ENV MASK_THRESHOLD=0.5
+ENV GARMENT_CONF=0.25
+ENV BAD_CLASS_CONF=0.35
+ENV PERSON_CONF=0.75
 ENV SAVE_INFERENCE_RESULTS=true
 ENV INFERENCE_OUTPUT_DIR=/app/inference_results
 

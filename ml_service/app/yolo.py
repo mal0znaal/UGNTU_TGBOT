@@ -45,15 +45,23 @@ def preprocess_rgb(
     new_h = int(orig_h * scale)
     resized = cv2.resize(image_rgb, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
 
-    canvas = np.full((target_h, target_w, 3), 114, dtype=np.uint8)
-    pad_x = (target_w - new_w) // 2
-    pad_y = (target_h - new_h) // 2
-    canvas[pad_y : pad_y + new_h, pad_x : pad_x + new_w] = resized
+    pad_w = target_w - new_w
+    pad_h = target_h - new_h
+    pad_left = pad_w // 2
+    pad_right = pad_w - pad_left
+    pad_top = pad_h // 2
+    pad_bottom = pad_h - pad_top
+
+    # Аппаратное добавление рамок через OpenCV
+    canvas = cv2.copyMakeBorder(
+        resized, pad_top, pad_bottom, pad_left, pad_right, 
+        cv2.BORDER_CONSTANT, value=(114, 114, 114)
+    )
 
     tensor = canvas.astype(np.float32) / 255.0
     tensor = tensor.transpose(2, 0, 1)[np.newaxis]
 
-    return tensor, (orig_h, orig_w, scale, pad_x, pad_y)
+    return tensor, (orig_h, orig_w, scale, pad_left, pad_top)
 
 
 def postprocess(
@@ -63,39 +71,17 @@ def postprocess(
     iou_threshold: float,
 ) -> list[Detection]:
     """
-    Supports two common YOLO output layouts:
-      - YOLOv5/v7: [1, N, 85] - bbox(4) + obj_conf(1) + class_scores(80)
-      - YOLOv8/v9: [1, 84, N] - bbox(4) + class_scores(80), no objectness
-      - NMS export: [1, N, 6] - bbox(4) + score(1) + class_id(1)
-
-    This logic mirrors the source preprocess/postprocess sample used for the
-    exported detector. Boxes are treated as x1, y1, x2, y2 in model-space pixels.
+    Обработка выхода NMS модели. 
+    Формат выхода: [1, N, 6] - bbox(4) + score(1) + class_id(1)
     """
     orig_h, orig_w, scale, pad_x, pad_y = orig_info
-    raw: np.ndarray = outputs[0]
+    preds = outputs[0][0]  # Извлекаем из батча, получаем [N, 6]
 
-    if raw.ndim != 3:
-        raise ValueError(f"Unexpected output ndim={raw.ndim}, shape={raw.shape}")
+    if preds.ndim != 2 or preds.shape[1] != 6:
+        raise ValueError(f"Expected NMS output shape [N, 6], got {preds.shape}")
 
-    if raw.shape[2] > raw.shape[1]:
-        preds = raw[0].T
-    else:
-        preds = raw[0]
-
-    num_attrs = preds.shape[1]
-
-    if num_attrs == 6:
-        confidences = preds[:, 4]
-        class_ids = preds[:, 5].astype(np.int64)
-    elif num_attrs == 85:
-        objectness = preds[:, 4]
-        class_scores = preds[:, 5:]
-        class_ids = class_scores.argmax(axis=1)
-        confidences = objectness * class_scores[np.arange(len(preds)), class_ids]
-    else:
-        class_scores = preds[:, 4:]
-        class_ids = class_scores.argmax(axis=1)
-        confidences = class_scores[np.arange(len(preds)), class_ids]
+    confidences = preds[:, 4]
+    class_ids = preds[:, 5].astype(np.int64)
 
     keep = confidences >= conf_threshold
     if not keep.any():
@@ -105,37 +91,17 @@ def postprocess(
     confidences = confidences[keep]
     class_ids = class_ids[keep]
 
-    x1, y1, x2, y2 = boxes_xyxy.T
-
-    x1 = (x1 - pad_x) / scale
-    y1 = (y1 - pad_y) / scale
-    x2 = (x2 - pad_x) / scale
-    y2 = (y2 - pad_y) / scale
-
-    x1 = np.clip(x1 / orig_w, 0.0, 1.0)
-    y1 = np.clip(y1 / orig_h, 0.0, 1.0)
-    x2 = np.clip(x2 / orig_w, 0.0, 1.0)
-    y2 = np.clip(y2 / orig_h, 0.0, 1.0)
+    # Перевод координат в исходный размер и нормализация 0..1 аппаратно
+    boxes_xyxy[:, 0] = np.clip((boxes_xyxy[:, 0] - pad_x) / scale / orig_w, 0.0, 1.0)
+    boxes_xyxy[:, 1] = np.clip((boxes_xyxy[:, 1] - pad_y) / scale / orig_h, 0.0, 1.0)
+    boxes_xyxy[:, 2] = np.clip((boxes_xyxy[:, 2] - pad_x) / scale / orig_w, 0.0, 1.0)
+    boxes_xyxy[:, 3] = np.clip((boxes_xyxy[:, 3] - pad_y) / scale / orig_h, 0.0, 1.0)
 
     return [
-        Detection(
-            bbox=[float(x1[i]), float(y1[i]), float(x2[i]), float(y2[i])],
-            confidence=float(confidences[i]),
-            class_id=int(class_ids[i]),
-        )
-        for i in range(len(confidences))
+        Detection(bbox=box.tolist(), confidence=float(conf), class_id=int(cls_id))
+        for box, conf, cls_id in zip(boxes_xyxy, confidences, class_ids)
     ]
 
-
-def select_largest_detection(detections: list[Detection]) -> Detection | None:
-    if not detections:
-        return None
-
-    def area(det: Detection) -> float:
-        x1, y1, x2, y2 = det.bbox
-        return max(0.0, x2 - x1) * max(0.0, y2 - y1)
-
-    return max(detections, key=area)
 
 
 class YoloDetector:

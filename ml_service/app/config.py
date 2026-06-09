@@ -94,22 +94,20 @@ def _get_bool(name: str, default: bool) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
-    garment_model_path: str = os.getenv(
-        "GARMENT_MODEL_PATH",
-        os.getenv("DETECTOR_ONNX_PATH", "/app/models/detector.onnx"),
-    )
-    bad_classes_detector_path: str = os.getenv(
-        "BAD_CLASSES_DETECTOR_PATH",
-        "/app/models/bad_classes_detector.onnx",
-    )
+    garment_model_path: str = os.getenv("GARMENT_MODEL_PATH", "/app/models/detector.onnx")
     yolo_input_size: int = _get_int("YOLO_INPUT_SIZE", 960)
     yolo_iou_threshold: float = _get_float("YOLO_IOU_THRESHOLD", 0.45)
-    garment_conf: float = _get_float("GARMENT_CONF", 0.25)
-    bad_class_conf: float = _get_float("BAD_CLASS_CONF", 0.35)
-    person_conf: float = _get_float("PERSON_CONF", 0.75)
-    bad_class_names: tuple[str, ...] = tuple(BAD_CLASS_NAMES)
+    garment_conf: float = _get_float("GARMENT_CONF", 0.4)
     save_inference_results: bool = _get_bool("SAVE_INFERENCE_RESULTS", True)
     inference_output_dir: str = os.getenv("INFERENCE_OUTPUT_DIR", "/app/inference_results")
+    
+    # Новые пути для SegFormer и Классификатора
+    segformer_model_path: str = os.getenv("SEGFORMER_MODEL_PATH", "/app/models/segmenter.onnx")
+    segformer_input_size: int = _get_int("SEGFORMER_INPUT_SIZE", 720) # Исправлен размер на 720
+    segformer_threshold: float = _get_float("SEGFORMER_THRESHOLD", 0.5)
+
+    classifier_manifest_path: str = os.getenv("CLASSIFIER_MANIFEST_PATH", "/app/models/classifier/manifest.json")
+    classifier_models_dir: str = os.getenv("CLASSIFIER_MODELS_DIR", "/app/models/classifier")
 
 
 def get_settings() -> Settings:

@@ -47,33 +47,48 @@ async def handle_photo(message: Message, bot: Bot):
 
             async with http_session.post(ML_SERVICE_URL, data=form) as response:
                 if response.status == 200:
-                    content_type = response.headers.get("Content-Type", "")
-                    if content_type.startswith("text/plain"):
-                        await message.answer(await response.text())
+                    result_json = await response.json()
+                    
+                    # Проверяем, нашел ли детектор одежду
+                    if result_json.get("decision") == "REJECT":
+                        reason = result_json.get("reason", "Неизвестная причина")
+                        await message.answer(f"❌ Одежда не найдена или отклонена.\nПричина: {reason}")
                         return
-                    if content_type.startswith("application/json"):
-                        result_json = await response.json()
-                        await message.answer(
-                            f"<pre>{json.dumps(result_json, ensure_ascii=False, indent=2)}</pre>",
-                            parse_mode="HTML",
-                        )
+                        
+                    # Если всё хорошо, достаем картинку из Base64
+                    import base64
+                    image_b64 = result_json.get("image_base64")
+                    if not image_b64:
+                        await message.answer("Ошибка: сервер не вернул картинку.")
                         return
-
-                    result_image_bytes = await response.read()
-                    result_file = BufferedInputFile(
-                        result_image_bytes,
-                        filename="detections.png",
+                        
+                    image_bytes = base64.b64decode(image_b64)
+                    result_file = BufferedInputFile(image_bytes, filename="result.png")
+                    
+                    # Достаем теги классификации
+                    cls_info = result_json.get("classification", {})
+                    category = cls_info.get("category", "?")
+                    subcategory = cls_info.get("subcategory", "?")
+                    color_hex = cls_info.get("color", "?")
+                    seasons = ", ".join(cls_info.get("seasons", []))
+                    styles = ", ".join(cls_info.get("styles", []))
+                    
+                    # Формируем красивую подпись (caption)
+                    caption = (
+                        f"✨ <b>Результат обработки:</b>\n\n"
+                        f"🧥 <b>Категория:</b> {category}\n"
+                        f"👕 <b>Подкатегория:</b> {subcategory}\n"
+                        f"🎨 <b>Цвет (HEX):</b> {color_hex}\n"
+                        f"☀️ <b>Сезон:</b> {seasons}\n"
+                        f"🎭 <b>Стиль:</b> {styles}"
                     )
-                    if len(result_image_bytes) < TELEGRAM_PHOTO_SIZE_LIMIT:
-                        await message.answer_photo(
-                            photo=result_file,
-                            caption="Готово! Вот результат детектора.",
-                        )
-                    else:
-                        await message.answer_document(
-                            document=result_file,
-                            caption="Готово! Вот результат детектора.",
-                        )
+                    
+                    # Отправляем фото пользователю
+                    await message.answer_photo(
+                        photo=result_file,
+                        caption=caption,
+                        parse_mode="HTML"
+                    )
                 else:
                     await message.answer(f"Ошибка от нейросети. Код: {response.status}")
     except Exception as exc:

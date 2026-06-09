@@ -7,6 +7,9 @@ venv/
 .vscode/
 
 # models are stored outside normal git history
+ml_service/models/**/*.onnx
+ml_service/models/**/*.pt
+ml_service/models/**/*.pth
 ml_service/models/*.onnx
 ml_service/models/*.pt
 ml_service/models/*.pth
@@ -19,3 +22,4 @@ ml_validator/models/*.onnx
 result.png
 ml_service/inference_results/
 *.log
+*.ipynb

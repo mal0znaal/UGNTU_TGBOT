@@ -8,3 +8,8 @@ export/
 runs/
 data/
 inference_results/
+bg_removal_comparison_outputs/
+validation_outputs/
+*.ipynb
+docker-compose.example.yml
+README.md

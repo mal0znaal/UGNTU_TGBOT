@@ -11,10 +11,7 @@ services:
       - ./ml_service/inference_results:/app/inference_results
     environment:
       GARMENT_MODEL_PATH: /app/models/detector.onnx
-      BAD_CLASSES_DETECTOR_PATH: /app/models/bad_classes_detector.onnx
-      GARMENT_CONF: "0.25"
-      BAD_CLASS_CONF: "0.35"
-      PERSON_CONF: "0.75"
+      GARMENT_CONF: "0.4"
       SAVE_INFERENCE_RESULTS: "true"
       INFERENCE_OUTPUT_DIR: /app/inference_results
     healthcheck:
@@ -39,7 +36,7 @@ services:
     env_file:
       - .env
     environment:
-      ML_SERVICE_URL: http://ml-service:8000/cascade
+      ML_SERVICE_URL: http://ml-service:8000/process_full
     depends_on:
       ml-service:
         condition: service_healthy

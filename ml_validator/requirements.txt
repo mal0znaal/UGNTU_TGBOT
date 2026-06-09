@@ -1,9 +1,0 @@
-numpy
-opencv-python-headless
-onnxruntime
-PyYAML
-matplotlib
-pandas
-tqdm
-jupyter
-ipykernel

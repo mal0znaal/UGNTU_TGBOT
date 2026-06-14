@@ -36,7 +36,7 @@ services:
     env_file:
       - .env
     environment:
-      ML_SERVICE_URL: http://ml-service:8000/process_full
+      ML_SERVICE_URL: http://ml-service:8000/process
     depends_on:
       ml-service:
         condition: service_healthy

@@ -1,5 +1,5 @@
 import asyncio
-import json
+import base64
 import os
 import sys
 
@@ -14,7 +14,7 @@ if sys.platform == "win32":
 
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://ml-service:8000/cascade")
+ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://ml-service:8000/process")
 TELEGRAM_PHOTO_SIZE_LIMIT = 10 * 1024 * 1024
 
 dp = Dispatcher()
@@ -49,14 +49,11 @@ async def handle_photo(message: Message, bot: Bot):
                 if response.status == 200:
                     result_json = await response.json()
                     
-                    # Проверяем, нашел ли детектор одежду
                     if result_json.get("decision") == "REJECT":
                         reason = result_json.get("reason", "Неизвестная причина")
                         await message.answer(f"❌ Одежда не найдена или отклонена.\nПричина: {reason}")
                         return
                         
-                    # Если всё хорошо, достаем картинку из Base64
-                    import base64
                     image_b64 = result_json.get("image_base64")
                     if not image_b64:
                         await message.answer("Ошибка: сервер не вернул картинку.")
@@ -65,25 +62,22 @@ async def handle_photo(message: Message, bot: Bot):
                     image_bytes = base64.b64decode(image_b64)
                     result_file = BufferedInputFile(image_bytes, filename="result.png")
                     
-                    # Достаем теги классификации
                     cls_info = result_json.get("classification", {})
                     category = cls_info.get("category", "?")
                     subcategory = cls_info.get("subcategory", "?")
-                    color_hex = cls_info.get("color", "?")
+                    color = cls_info.get("color", "?")
                     seasons = ", ".join(cls_info.get("seasons", []))
                     styles = ", ".join(cls_info.get("styles", []))
                     
-                    # Формируем красивую подпись (caption)
                     caption = (
                         f"✨ <b>Результат обработки:</b>\n\n"
                         f"🧥 <b>Категория:</b> {category}\n"
                         f"👕 <b>Подкатегория:</b> {subcategory}\n"
-                        f"🎨 <b>Цвет (HEX):</b> {color_hex}\n"
+                        f"🎨 <b>Цвет:</b> {color}\n"
                         f"☀️ <b>Сезон:</b> {seasons}\n"
                         f"🎭 <b>Стиль:</b> {styles}"
                     )
                     
-                    # Отправляем фото пользователю
                     await message.answer_photo(
                         photo=result_file,
                         caption=caption,

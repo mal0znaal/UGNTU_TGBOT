@@ -9,14 +9,13 @@ services:
       - "8000:8000"
     environment:
       GARMENT_MODEL_PATH: /app/models/detector.onnx
-      BAD_CLASSES_DETECTOR_PATH: /app/models/bad_classes_detector.onnx
+      SEGFORMER_MODEL_PATH: /app/models/segmenter.onnx
+      CLASSIFIER_MANIFEST_PATH: /app/models/classifier/manifest.json
+      CLASSIFIER_MODELS_DIR: /app/models/classifier
       SAVE_INFERENCE_RESULTS: "true"
       INFERENCE_OUTPUT_DIR: /app/inference_results
       YOLO_INPUT_SIZE: 960
-      YOLO_IOU_THRESHOLD: 0.45
       GARMENT_CONF: 0.25
-      BAD_CLASS_CONF: 0.35
-      PERSON_CONF: 0.75
     volumes:
       - ./models:/app/models:ro
       - ./inference_results:/app/inference_results
@@ -33,11 +32,11 @@ services:
       retries: 3
       start_period: 20s
 
-  # Telegram bot example:
+  # Пример настройки Telegram-бота:
   # bot:
   #   image: your-telegram-bot-image
   #   environment:
-  #     ML_SERVICE_URL: http://ml-service:8000/cascade
+  #     ML_SERVICE_URL: http://ml-service:8000/process
   #   depends_on:
   #     ml-service:
   #       condition: service_healthy

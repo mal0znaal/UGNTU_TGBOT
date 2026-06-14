@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from time import perf_counter
+
 import cv2
 import numpy as np
 import onnxruntime as ort
+
+from app.timing import PhaseTiming
 
 
 IMAGENET_MEAN = np.array((0.485, 0.456, 0.406), dtype=np.float32)
@@ -55,7 +59,17 @@ class SegFormerSegmenter:
         probabilities = sigmoid(logits_2d)
         return (probabilities >= self.threshold).astype(np.uint8) * 255
 
-    def predict_mask(self, crop_rgb: np.ndarray) -> np.ndarray:
+    def predict_mask(self, crop_rgb: np.ndarray) -> tuple[np.ndarray, PhaseTiming]:
+        preprocess_start = perf_counter()
         tensor = self._preprocess(crop_rgb)
+        preprocess_ms = (perf_counter() - preprocess_start) * 1000
+
+        inference_start = perf_counter()
         outputs = self.session.run(self.output_names, {self.input_name: tensor})
-        return self._logits_to_mask(outputs[0], crop_rgb.shape[:2])
+        inference_ms = (perf_counter() - inference_start) * 1000
+
+        postprocess_start = perf_counter()
+        mask = self._logits_to_mask(outputs[0], crop_rgb.shape[:2])
+        postprocess_ms = (perf_counter() - postprocess_start) * 1000
+
+        return mask, PhaseTiming(preprocess_ms, inference_ms, postprocess_ms)

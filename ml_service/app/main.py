@@ -4,21 +4,20 @@ import logging
 from contextlib import asynccontextmanager
 from time import perf_counter
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, BackgroundTasks
-from fastapi.responses import JSONResponse, Response
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.image_utils import DecodeImageError
 from app.pipeline import DetectionPipeline, InferenceError, NoDetectionError
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    settings = get_settings()
-    app.state.pipeline = DetectionPipeline.from_settings(settings)
+    app.state.pipeline = DetectionPipeline.from_settings(get_settings())
     yield
 
 
@@ -30,108 +29,35 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/detect")
-async def detect(file: UploadFile = File(...)) -> Response:
+@app.post("/process")
+async def process(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+) -> JSONResponse:
     request_start = perf_counter()
     image_bytes = await file.read()
     pipeline: DetectionPipeline = app.state.pipeline
 
     try:
-        png_bytes = pipeline.process(image_bytes)
-    except DecodeImageError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except NoDetectionError as exc:
-        return Response(content="Ничего не распозналось", media_type="text/plain; charset=utf-8")
-    except InferenceError as exc:
-        logger.exception("Inference failed")
-        raise HTTPException(status_code=500, detail="Internal inference error") from exc
-
-    total_ms = (perf_counter() - request_start) * 1000
-    logger.info(
-        "request timings: total=%.2fms input_bytes=%d output_bytes=%d",
-        total_ms,
-        len(image_bytes),
-        len(png_bytes),
-    )
-    return Response(content=png_bytes, media_type="image/png")
-
-
-@app.post("/cascade")
-async def cascade(file: UploadFile = File(...)) -> JSONResponse:
-    request_start = perf_counter()
-    image_bytes = await file.read()
-    pipeline: DetectionPipeline = app.state.pipeline
-
-    try:
-        result = pipeline.simple_cascade(image_bytes)
-    except DecodeImageError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except InferenceError as exc:
-        logger.exception("Simple cascade inference failed")
-        raise HTTPException(status_code=500, detail="Internal inference error") from exc
-
-    total_ms = (perf_counter() - request_start) * 1000
-    logger.info(
-        "simple cascade request timings: total=%.2fms input_bytes=%d decision=%s reason=%s",
-        total_ms,
-        len(image_bytes),
-        result["decision"],
-        result["reason"],
-    )
-    return JSONResponse(content=result)
-
-
-@app.post("/process_full")
-async def process_full(file: UploadFile = File(...), bg_tasks: BackgroundTasks = BackgroundTasks()) -> JSONResponse:
-    """
-    Эндпоинт для полного цикла обработки:
-    Детекция (YOLO) -> Вырезка фона (SegFormer) -> Классификация (FashionClassifier)
-    Возвращает JSON с картинкой в Base64 и всеми тегами.
-    """
-    request_start = perf_counter()
-    image_bytes = await file.read()
-    pipeline: DetectionPipeline = app.state.pipeline
-
-    try:
-        # Вызываем наш новый метод из pipeline.py, передаем фоновые задачи
-        result = pipeline.process_full(image_bytes, bg_tasks)
+        result = pipeline.process(image_bytes, background_tasks)
     except DecodeImageError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except NoDetectionError as exc:
         return JSONResponse(content={"decision": "REJECT", "reason": str(exc)})
     except InferenceError as exc:
-        logger.exception("Full processing failed")
+        logger.exception("Ошибка обработки изображения")
         raise HTTPException(status_code=500, detail="Internal inference error") from exc
 
     total_ms = (perf_counter() - request_start) * 1000
+    timings = result["timings"]
     logger.info(
-        "process_full request timings: total=%.2fms input_bytes=%d",
+        "POST /process: preprocess=%.2fms inference=%.2fms "
+        "postprocess=%.2fms total=%.2fms input_bytes=%d",
+        timings["preprocess_ms"],
+        timings["inference_ms"],
+        timings["postprocess_ms"],
         total_ms,
         len(image_bytes),
     )
-    return JSONResponse(content=result)
-
-
-@app.post("/cascade_legacy")
-async def cascade_legacy(file: UploadFile = File(...)) -> JSONResponse:
-    request_start = perf_counter()
-    image_bytes = await file.read()
-    pipeline: DetectionPipeline = app.state.pipeline
-
-    try:
-        result = pipeline.cascade(image_bytes)
-    except DecodeImageError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except InferenceError as exc:
-        logger.exception("Cascade inference failed")
-        raise HTTPException(status_code=500, detail="Internal inference error") from exc
-
-    total_ms = (perf_counter() - request_start) * 1000
-    logger.info(
-        "cascade request timings: total=%.2fms input_bytes=%d decision=%s reason=%s",
-        total_ms,
-        len(image_bytes),
-        result["decision"],
-        result["reason"],
-    )
+    result["timings"]["total_ms"] = round(total_ms, 2)
     return JSONResponse(content=result)

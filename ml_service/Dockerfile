@@ -12,12 +12,11 @@ COPY app /app/app
 COPY models /app/models
 
 ENV GARMENT_MODEL_PATH=/app/models/detector.onnx
-ENV BAD_CLASSES_DETECTOR_PATH=/app/models/bad_classes_detector.onnx
 ENV YOLO_INPUT_SIZE=960
-ENV YOLO_IOU_THRESHOLD=0.45
 ENV GARMENT_CONF=0.25
-ENV BAD_CLASS_CONF=0.35
-ENV PERSON_CONF=0.75
+ENV SEGFORMER_MODEL_PATH=/app/models/segmenter.onnx
+ENV CLASSIFIER_MANIFEST_PATH=/app/models/classifier/manifest.json
+ENV CLASSIFIER_MODELS_DIR=/app/models/classifier
 ENV SAVE_INFERENCE_RESULTS=true
 ENV INFERENCE_OUTPUT_DIR=/app/inference_results
 

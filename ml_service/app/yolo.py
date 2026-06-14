@@ -7,6 +7,8 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
+from app.timing import PhaseTiming
+
 
 @dataclass(frozen=True)
 class Detection:
@@ -16,16 +18,9 @@ class Detection:
 
 
 @dataclass(frozen=True)
-class DetectorTiming:
-    preprocess_ms: float
-    inference_ms: float
-    postprocess_ms: float
-
-
-@dataclass(frozen=True)
 class DetectorResult:
     detections: list[Detection]
-    timing: DetectorTiming
+    timing: PhaseTiming
 
 
 def preprocess_rgb(
@@ -33,11 +28,7 @@ def preprocess_rgb(
     target_h: int,
     target_w: int,
 ) -> tuple[np.ndarray, tuple[int, int, float, int, int]]:
-    """
-    Letterbox resize -> normalise -> NCHW float32 tensor.
-    Returns the tensor and (orig_h, orig_w, scale, pad_x, pad_y) needed to
-    map predictions back to original image coordinates.
-    """
+    """Подготавливает изображение и данные для восстановления координат."""
     orig_h, orig_w = image_rgb.shape[:2]
 
     scale = min(target_w / orig_w, target_h / orig_h)
@@ -52,10 +43,14 @@ def preprocess_rgb(
     pad_top = pad_h // 2
     pad_bottom = pad_h - pad_top
 
-    # Аппаратное добавление рамок через OpenCV
     canvas = cv2.copyMakeBorder(
-        resized, pad_top, pad_bottom, pad_left, pad_right, 
-        cv2.BORDER_CONSTANT, value=(114, 114, 114)
+        resized,
+        pad_top,
+        pad_bottom,
+        pad_left,
+        pad_right,
+        cv2.BORDER_CONSTANT,
+        value=(114, 114, 114),
     )
 
     tensor = canvas.astype(np.float32) / 255.0
@@ -68,14 +63,10 @@ def postprocess(
     outputs: list[np.ndarray],
     orig_info: tuple[int, int, float, int, int],
     conf_threshold: float,
-    iou_threshold: float,
 ) -> list[Detection]:
-    """
-    Обработка выхода NMS модели. 
-    Формат выхода: [1, N, 6] - bbox(4) + score(1) + class_id(1)
-    """
+    """Преобразует выход NMS-модели в координаты исходного изображения."""
     orig_h, orig_w, scale, pad_x, pad_y = orig_info
-    preds = outputs[0][0]  # Извлекаем из батча, получаем [N, 6]
+    preds = outputs[0][0]
 
     if preds.ndim != 2 or preds.shape[1] != 6:
         raise ValueError(f"Expected NMS output shape [N, 6], got {preds.shape}")
@@ -91,7 +82,6 @@ def postprocess(
     confidences = confidences[keep]
     class_ids = class_ids[keep]
 
-    # Перевод координат в исходный размер и нормализация 0..1 аппаратно
     boxes_xyxy[:, 0] = np.clip((boxes_xyxy[:, 0] - pad_x) / scale / orig_w, 0.0, 1.0)
     boxes_xyxy[:, 1] = np.clip((boxes_xyxy[:, 1] - pad_y) / scale / orig_h, 0.0, 1.0)
     boxes_xyxy[:, 2] = np.clip((boxes_xyxy[:, 2] - pad_x) / scale / orig_w, 0.0, 1.0)
@@ -110,19 +100,14 @@ class YoloDetector:
         model_path: str,
         input_size: int,
         conf_threshold: float,
-        iou_threshold: float,
     ) -> None:
         self.input_size = input_size
         self.conf_threshold = conf_threshold
-        self.iou_threshold = iou_threshold
         self.session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
         self.input_name = self.session.get_inputs()[0].name
         self.output_names = [output.name for output in self.session.get_outputs()]
 
-    def detect(self, image_rgb: np.ndarray) -> list[Detection]:
-        return self.detect_with_timing(image_rgb).detections
-
-    def detect_with_timing(self, image_rgb: np.ndarray) -> DetectorResult:
+    def detect(self, image_rgb: np.ndarray) -> DetectorResult:
         preprocess_start = perf_counter()
         tensor, orig_info = preprocess_rgb(image_rgb, self.input_size, self.input_size)
         preprocess_ms = (perf_counter() - preprocess_start) * 1000
@@ -132,12 +117,12 @@ class YoloDetector:
         inference_ms = (perf_counter() - inference_start) * 1000
 
         postprocess_start = perf_counter()
-        detections = postprocess(outputs, orig_info, self.conf_threshold, self.iou_threshold)
+        detections = postprocess(outputs, orig_info, self.conf_threshold)
         postprocess_ms = (perf_counter() - postprocess_start) * 1000
 
         return DetectorResult(
             detections=detections,
-            timing=DetectorTiming(
+            timing=PhaseTiming(
                 preprocess_ms=preprocess_ms,
                 inference_ms=inference_ms,
                 postprocess_ms=postprocess_ms,
